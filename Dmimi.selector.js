@@ -1,192 +1,151 @@
 /*
 	节点操作
 */
-
-DMIMI.selector = {
-	find:function(selector){
-		
-		var ele = this;
-		var domTemp = [];
-
-		if(selector){
-			var object = DMIMI.cpu._test("attr",selector);
-			DMIMI.each(ele,function(dom){
-				domTemp = DMIMI._selector(selector,dom,"find");
-			});
-			return domTemp;
-		}else{
+DMIMI.add("selector",function($){
+	return ({
+		find:function(selector){
+			var ele = this;
+			var domTemp = [];
+			if(selector){
+				$.each(ele,function(){
+					domTemp = domTemp.concat(
+						$._selector(selector,this,"find")[0]
+					);
+				});
+				return $.classArray(domTemp);
+			}
 			return null;
-		}
-		
-	},
-	parent: function( selector ) {
-		var ele = this;
-		var domTemp = [];
-		if(selector){
-			var object = DMIMI.cpu._test("attr",selector);
-			domTemp = DMIMI.cpu.dir(ele,selector,"parentNode",object);
-			return DMIMI.classArray(domTemp);
-		}else{
-			DMIMI.each(ele,function(dom){
-				if(dom.parentNode){
-					domTemp.push(dom.parentNode);
-				}
-			});
-			return DMIMI.classArray(domTemp);
-		}
-		//var parent = selector.parentNode;
-		//return parent && parent.nodeType !== 11 ? parent : null;
-	},
-	next: function( selector ) {
-		var ele = this;
-		var domTemp = [];
-		if(selector){
-			var object = DMIMI.cpu._test("attr",selector);
+		},
+		contents: function( selector ) {
+			var ele = this;
+			var dom = ele[0][0].contentWindow.document;
+			return $._selector(selector,dom,"find");
+		},
+		init:function(){
+			var self = this;
+			/*
+				selector 基础处理函数
+			*/
+			({
+				attrs:{
+					parent:["parentNode",1],
+					next:["nextSibling",1],
+					prev:["previousSibling",1],
+					nextAll:["nextSibling",2],
+					prevAll:["previousSibling",2],
+					siblings:["nextSibling",3,"parentNode.firstChild"],
+					children:["nextSibling",3,"firstChild"]
+				},
+				/*
+					递归寻找
+					@param {dom} 节点
+					@param {dir} 关系
 
-			domTemp = DMIMI.cpu.dir(selector,"nextSibling",object);
-			
-		}else{
-			DMIMI.each(ele,function(dom){
-				DMIMI.cpu.nsibling(dom,"nextSibling",domTemp);
-			});
-		}
+				*/ 
+				recursion:function(dom,dir){
+					var _Selector = this;
+					var arr = [];
+					void function rec(dom){
+						if(dom[dir]){
+							if(_Selector.verify.call(dom[dir])){
+								arr = dom[dir];
+							}else{
+								rec(dom[dir]);
+							}
+						}
+					}(dom);
+					return arr;
+				},
+				/*
+					遍历寻找
+					@param {dom} 节点
+					@param {dir} 关系 每一次查询关系
+					@param {dom} 节点 用于判断本身
 
-		DMIMI_ELE[0] = domTemp;
-		return DMIMI_ELE;
+				*/
+				foreach:function(dom,dir,elem){
+					var _Selector = this;
+					var arr = [];
+					for ( ; dom; dom = dom[dir] ) {
+						if (_Selector.verify.call(dom) && dom !== elem ) {
+							arr.push( dom );
+						}
+					}
+					return arr;
+				},
+				/*
+					设置函数到DMIMI
+					@param {String} 键名
+					@param {Array} 存储该健名属性
+				*/
+				setSelector:function(method,arr){
+					var _Selector = this;
 
-		//return DMIMI.cpu.nth( DMIMI_ELE[0][0], selector, "nextSibling" );
-	},
-	prev: function( selector ) {
-		var ele = this;
-		var domTemp = [];
-		if(selector){
-			var object = DMIMI.cpu._test("attr",selector);
-			domTemp = DMIMI.cpu.dir(selector,"previousSibling",object);
-			return DMIMI.classArray(domTemp);
-		}else{
-			DMIMI.each(ele,function(dom){
-				DMIMI.cpu.nsibling(dom,"previousSibling",domTemp);
-			});
-			return DMIMI.classArray(domTemp);
-		}
-
-		//return DMIMI.cpu.nth( selector, 2, "previousSibling" );
-	},
-	nextAll: function( selector ) {
-		var ele = this;
-		var domTemp = [];
-		if(selector){
-			var object = DMIMI.cpu._test("attr",selector);
-			
-			DMIMI.each(ele,function(dom){
-				var _dom = [];
-				DMIMI.cpu.sibling("nextSibling",dom,dom,_dom);
-				for(var j=0;j<_dom.length;j++){
-					if(DMIMI.cpu.validateSelector(_dom[j],object)){
-						domTemp.push(_dom[j]);
+					self[method] = function(selector){
+						_Selector.verify = selector ? function(){
+								var object = $.cpu._test("attr",selector);
+								return this.nodeType===1&&$.cpu.validateSelector(this,object);
+							}:function(){
+								return this.nodeType===1;
+							};
+						return $.classArray(self[method].dir.call(this,arr));
+					}
+					self[method].dir = (function(){
+						switch(arr[1]){
+							case 1:
+								return function(arr){
+									var domTemp = [];
+									$.each(this,function(){
+										domTemp = domTemp.concat(
+											_Selector.recursion.apply(
+												_Selector,
+												[this,arr[0],this]
+											)
+										);
+									});
+									return domTemp;
+								};
+							break;
+							case 2:
+								return function(arr){
+									var domTemp = [];
+									$.each(this,function(){
+										domTemp = domTemp.concat(
+											_Selector.foreach.apply(
+												_Selector,
+												[this,arr[0],this]
+											)
+										);
+									});
+									return domTemp;
+								};
+							break;
+							case 3:	
+								return function(arr){
+									var domTemp = [];
+									$.each(this,function(){
+										domTemp = domTemp.concat(
+											_Selector.foreach.apply(
+												_Selector,
+												[$.futher(this,arr[2]),arr[0],this]
+											)
+										);
+									});
+									return domTemp;
+								};
+							break;
+						}
+					})();
+				},
+				init:function(){
+					var arr;
+					for(var name in this.attrs){
+						this.setSelector(name,this.attrs[name]);
 					}
 				}
-			});
-			return DMIMI.classArray(domTemp);
-		}else{
-			DMIMI.each(ele,function(dom){
-				DMIMI.cpu.sibling("nextSibling",dom,dom,domTemp);
-			});
-			return DMIMI.classArray(domTemp);
+			}).init();
+
+			return this;
 		}
-		//return DMIMI.cpu.dir( selector, "nextSibling" );
-	},
-	prevAll: function( selector ) {
-		var ele = this;
-		var domTemp = [];
-		if(selector){
-			var object = DMIMI.cpu._test("attr",selector);
-			
-			DMIMI.each(ele,function(dom){
-				var _dom = [];
-				DMIMI.cpu.sibling(dom,dom,_dom);
-				for(var j=0;j<_dom.length;j++){
-					if(DMIMI.cpu.validateSelector(_dom[j],object)){
-						domTemp.push(_dom[j]);
-					}
-				}
-			});
-			return DMIMI.classArray(domTemp);
-		}else{
-			DMIMI.each(ele,function(dom){
-				DMIMI.cpu.sibling("previousSibling",dom,dom,domTemp);
-			});
-			return DMIMI.classArray(domTemp);
-		}
-		//return DMIMI.cpu.dir( selector, "previousSibling" );
-	},
-	siblings: function( selector ) {
-		var ele = this;
-		var domTemp = [];
-		if(selector){
-			var object = DMIMI.cpu._test("attr",selector);
-
-			DMIMI.each(ele,function(dom){
-				var _dom = [];
-				DMIMI.cpu.sibling("nextSibling",dom.parentNode.firstChild,dom,_dom);
-				for(var j=0;j<_dom.length;j++){
-					if(DMIMI.cpu.validateSelector(_dom[j],object)){
-						domTemp.push(_dom[j]);
-					}
-				}
-			});
-			return DMIMI.classArray(domTemp);
-		}else{
-			DMIMI.each(ele,function(dom){
-				DMIMI.cpu.sibling("nextSibling",dom.parentNode.firstChild,dom,domTemp);
-			});
-			return DMIMI.classArray(domTemp);
-		}
-
-
-		//return DMIMI.cpu.sibling( selector.parentNode.firstChild, selector );
-	},
-	children: function( selector ) {
-		/*
-			判断当父节点为空的时候 children 肯定也是空
-		*/
-		var ele = this;
-		/*
-			这时候需要对selector进行解析
-		*/
-
-		if(selector){
-			var object = DMIMI.cpu._test("attr",selector);
-			var tempDom = [];
-
-			DMIMI.each(ele,function(dom){
-				var b = DMIMI.cpu.sibling("nextSibling",dom.firstChild);
-
-				for(var j=0;j<b.length;j++){
-					if(DMIMI.cpu.validateSelector(b[j],object)){
-						tempDom.push(b[j]);
-					}
-				}
-			});
-			return DMIMI.classArray(tempDom);
-		}else{
-			var arr = [];
-			DMIMI.each(ele,function(){
-				 this.childNodes;
-				for(var i=0;i<this.childNodes.length;i++){
-					if(this.childNodes[i].nodeType===1){
-						arr.push(this.childNodes[i]);
-					}
-				}
-			});
-			
-			return DMIMI.classArray(arr,true);
-			 
-		}
-	},
-	contents: function( selector ) {
-		var ele = this;
-		var dom = ele[0][0].contentWindow.document;
-		return DMIMI._selector(selector,dom,"find");
-	}
-};
+	}).init();
+});
