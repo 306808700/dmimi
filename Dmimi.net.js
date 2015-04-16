@@ -1,148 +1,130 @@
-/*
-	网络层
-*/
-DMIMI.add("net",function($){
-	return ({
-		jsonToParam:function(json){
-			var arr = [];
-			for(var i in json){
-				arr.push(i+"="+json[i]);
-			}
-			arr = arr.join("&");
-			return arr;
-		},
-		ajax:function( options ) {
-			var opts = {
-				async:true,
-				type:"POST",
-				dataType:"json",
-				error:function(error){
-				},
-				success:function(){}
-			};
+DMIMI.plugin("net", function($) {
+    return ({
+        
+        paramToJson:function(str){
+            var arr = str.split("&"),arr2 = [],temp = {},i;
+            for(i=0;i<arr.length;i++){
+                arr2 = arr[i].split("=");
+                temp[arr2[0]]=arr2[1];
+            }
+            return temp;
+        },
+        jsonToParam:function(json){
+            var str = "";
+            for(var i in json){
+                str+=i+"="+json[i]+"&";
+            }
+            str = str.substr(0,str.length-1);
+            return str;
+        },
+        ajax: function(options) {
 
-			var o = $.extend(options,opts);
-			var xmlhttp,script,head = document.head || document.getElementsByTagName( "head" )[0] || document.documentElement;
-			var scriptArray = [];
-			var param = $.jsonToParam(o.data);
-			var accepts = {
-				html: "text/html,text/css",
-				text: "text/plain",
-				json: "application/x-www-form-urlencoded, text/javascript"
-			};
-	
-			function XMLHttpRequestFn(){
-				if (xmlhttp.readyState==4){
-					if(xmlhttp.status==200){
-						var script;
-						var data = xmlhttp.responseText;
-						if(o.dataType=="javascript"){
-							new Function(data)();
-							o.success();
-							return;
-						}
-						if(o.dataType=="css"){
-							o.success();
-							return;
-						}
-						if(o.dataType=="json"){
-							data = eval("("+data+")");
-						}
+            $.ajaxNum?$.ajaxNum++:$.ajaxNum = 1;
+            var opts = {
+                url:"aboutblank",
+                type:"post",
+                dataType: "json",
+                timeout:0,
+                success: function() {},
+                error:function(){},
+                complete:function(){}
+            };
 
-						o.success(data);
-						if(o.dataType=="html"&&data.indexOf("<script")!=-1){
-							var str = data;
-							var resultUrl = str.match(/<script[\sa-zA-Z=':".\/-]*>.*<\/script>/g);
-							var temp,url=[];
-							if(resultUrl&&resultUrl.length>0){
-								for(var i=0;i<resultUrl.length;i++){
-									temp = resultUrl[i].match(/src[='"a-zA-z:.\/-]*/).join("");
-									temp = temp.replace(/src=/g,"").replace(/["']/g,"");
-									url.push(temp);
-								}
-							}
-							str = str.replace(/\s/g," ");
-							var resultScript = str.match(/<script[\sa-zA-Z='/]*>.*<\/script>/);
-							result = resultScript[0].match(/>.*</);
-							result = result[0].replace(/^>/,"");
-							result = result.replace(/<$/,"");
-							if(url.length>1){
-								for(var i=0;i<url.length;i++){
-									loadScript(url[i],url.length,function(){
-										new Function(result)();
-									});
-								}
-							}else{
-								new Function(result)();
-							}
-							//xmlhttp.detachEvent("onreadystatechange");
-						}
 
-						delete data;
-					}else{
-						o.error({state:xmlhttp.readyState,status:xmlhttp.status,res:xmlhttp.responseText});
-					}
-			    }
-			}
-			function loadScript( url,len,callback) {
-				script = document.createElement( "script" );
-				script.async = "async";
-				script.src = url;
-				//alert(len)
-				var scriptCallback = function(){
-					scriptArray.push(1);
-					if(scriptArray.length==len){
-						callback&&callback();
-					}
-				};
-				script.onload = script.onreadystatechange = function( _, isAbort ) {
-					if ( script.readyState&&/loaded|complete/.test(script.readyState)) {
-						scriptCallback();
-					}
-					if(!document.all){
-						scriptCallback();
-					}
-				};
-				head.insertBefore( script, head.firstChild );
-			};
+            var opt = $.extend(opts,options);
+            var callbackName,callbackParamName = "callback",symbol,paramCallback,xmlhttp, script,link, head = $("head");
 
-			if(o.dataType=="javascript"||o.dataType=="css"){
-				switch(o.dataType){
-					case "javascript":
-						loadScript(o.url,1,function(){
-							o.success();
-						});
-					break;
-					case "css":
-						var link = document.createElement("link");
-						link.href = o.url
-						link.rel = "stylesheet";
-						link.type = 'text/css';
-						head.insertBefore( link, head.firstChild );
-						setTimeout(function(){
-							o.success();
-						},1);
-					break;
-				}
-				return;
-			}
-			xmlhttp = window.XMLHttpRequest?new XMLHttpRequest():new ActiveXObject("Microsoft.XMLHTTP");
-			
-			if(o.async){
-				xmlhttp.onreadystatechange = function(){
-					XMLHttpRequestFn();
-				};
-			}else{
-				XMLHttpRequestFn();
-			}
 
-			xmlhttp.open(o.type.toUpperCase(),o.url,o.async);
-			xmlhttp.setRequestHeader("Content-Type",accepts[o.dataType]);
-			xmlhttp.send(param);
-			return $;
-		},
-		init:function(){
-			return this;
-		}
-	}).init();
+            if(opt.dataType == "jsonp"){
+
+                callbackName = "jsonpcallback"+$.ajaxNum;
+                if(opt.jsonp){
+                    callbackParamName = opt.jsonp;
+                }
+                window[callbackName] = function(res){
+                    $(script).remove();
+                    delete window[callbackName];
+                    return opt.success(res);
+                }
+                
+                var randomTime = +new Date();
+                symbol = opt.url.indexOf("?")!=-1?"&":"?";
+                opt.url = opt.url+symbol+"_dt="+randomTime;
+                symbol = opt.url.indexOf("?")!=-1?"&":"?";
+                paramCallback = symbol+callbackParamName+"=jsonpcallback"+$.ajaxNum;
+                if(opt.data){
+                    opt.url +="&"+$.jsonToParam(opt.data);
+                }
+
+
+                script = $.create("script",{type:"text/javascript",src:opt.url+paramCallback});
+                
+                head.append(script);
+                return false;
+            }
+            if(opt.dataType=="js"){
+                script = $.create("script",{type:"text/javascript",src:opt.url});
+                script[0].onload = function(){
+                    //$(script).remove();
+                    return opt.success();
+                };    
+                head.append(script);
+                return false;
+            }
+            if(opt.dataType=="css"){
+                link = $.create("link",{rel:"stylesheet",href:opt.url});
+                head.append(link);
+                return false;
+            }
+
+
+            if(opt.type.match(/post|get/)){
+                var xhr =  new XMLHttpRequest();
+                xhr.open(opt.type.toUpperCase(), opt.url, true);  
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                if(opt.beforeSend){
+                    opt.beforeSend(xhr);
+                }
+                xhr.send(opt.data?$.jsonToParam(opt.data):null);
+
+                if(opt.timeout){
+                    setTimeout(function(){
+                        opt.timeoutBoolen = true;
+                        opt.error({responseText:"timeout",status:"001"});
+
+                    },opt.timeout*1000);
+                }
+                xhr.onreadystatechange = function(){  
+                    if(opt.timeoutBoolen) return;
+                    //alert(xhr.readyState);  
+                    if (xhr.readyState == 4){ // 代表读取服务器的响应数据完成  
+                        
+                        var res = xhr.responseText || '{"responseText":"","status":"'+xhr.status+'"}';
+                        opt.complete();
+                        console.log(1423);
+                        if (xhr.status == 200){ // 代表服务器响应正常  
+                            if(opt.dataType=="json" && res){
+                                try{
+
+                                    res = JSON.parse(xhr.responseText);
+                                }
+                                catch(e){
+                                    console.log(123);
+                                    opt.error({responseText:"can not parse responseText",status:xhr.status,res:xhr.responseText});
+                                    return;
+                                }
+                            }
+                            opt.success(res,xhr.status);
+                        }else{
+                            opt.error({responseText:xhr.responseText,status:xhr.status});
+                        }
+                    }  
+                };  
+            }
+            return xhr;
+        },
+        init: function() {
+            return this;
+        }
+    }).init();
 });
